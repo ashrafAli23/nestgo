@@ -1,6 +1,7 @@
 <p align="center">
   <h1 align="center">NestGo</h1>
-  <p align="center">A NestJS-inspired web framework for Go with adapter-based architecture.</p>
+  <p align="center">NestGo is a powerful and flexible web framework for Go (Golang) designed for building scalable and maintainable server-side applications. Inspired by NestJS
+, NestGo stays true to Go’s philosophy of simplicity, performance, and explicitness while offering a modular architecture, dependency injection, and an adapter-based design. It is ideal for building REST APIs, microservices, and production-ready backend systems.</p>
 </p>
 
 <p align="center">
