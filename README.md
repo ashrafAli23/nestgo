@@ -1,8 +1,10 @@
+<h1 align="center">NestGo</h1>
+
 <p align="center">
-  <h1 align="center">NestGo</h1>
-  <p align="center">NestGo is a powerful and flexible web framework for Go (Golang) designed for building scalable and maintainable server-side applications. Inspired by <a href="https://nestjs.com" title="Visit NestJS official website">NestJS</a>
-, NestGo stays true to Go’s philosophy of simplicity, performance, and explicitness while offering a modular architecture, dependency injection, and an adapter-based design. It is ideal for building REST APIs, microservices, and production-ready backend systems.</p>
+  NestGo is a powerful and flexible web framework for Go (Golang) designed for building scalable and maintainable server-side applications. Inspired by <ahref="https://nestjs.com" title="Visit NestJS official website">NestJS</a>
+, NestGo stays true to Go’s philosophy of simplicity, performance, and explicitness while offering a modular architecture, dependency injection, and an adapter-based design. It is ideal for building REST APIs, microservices, and production-ready backend systems.
 </p>
+
 
 <p align="center">
   <a href="https://pkg.go.dev/github.com/ashrafAli23/nestgo"><img src="https://pkg.go.dev/badge/github.com/ashrafAli23/nestgo.svg" alt="Go Reference"></a>
