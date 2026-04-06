@@ -11,4 +11,6 @@ type Router interface {
 	HEAD(path string, handler HandlerFunc, middleware ...MiddlewareFunc)
 	Group(prefix string, middleware ...MiddlewareFunc) Router
 	Use(middleware ...MiddlewareFunc)
+	Static(path string, root string, middleware ...MiddlewareFunc)
+	StaticFile(path string, filePath string, middleware ...MiddlewareFunc)
 }

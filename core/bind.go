@@ -6,6 +6,26 @@ import (
 	"strings"
 )
 
+// ─── Pluggable Validator ────────────────────────────────────────────────────
+
+// globalValidateFunc is the pluggable validation function used by Body() and
+// QueryDTO(). Set it once at startup via SetValidateFunc.
+var globalValidateFunc func(v interface{}) error
+
+// SetValidateFunc registers a global validation function that Body() and
+// QueryDTO() call automatically after binding. This bridges nestgo-validator
+// (or any validation library) into the extraction pipeline.
+//
+// Call this once in main() before starting the server:
+//
+//	core.SetValidateFunc(validator.Validate)
+//
+// The function receives the bound DTO pointer and should return an error
+// (typically *validator.ValidationError or *core.HTTPError) on failure.
+func SetValidateFunc(fn func(v interface{}) error) {
+	globalValidateFunc = fn
+}
+
 // ─── Validator Interface ────────────────────────────────────────────────────
 
 // Validatable is an interface that DTOs can implement to self-validate.
@@ -52,6 +72,13 @@ func Body[T any](c Context) (*T, error) {
 	if err := c.Bind(dto); err != nil {
 		return nil, ErrBadRequest("invalid request body: " + err.Error())
 	}
+	// 1. Run global struct-tag validator (e.g. nestgo-validator) if registered.
+	if globalValidateFunc != nil {
+		if err := globalValidateFunc(dto); err != nil {
+			return nil, err
+		}
+	}
+	// 2. Run per-DTO custom validation if the DTO implements Validatable.
 	if v, ok := any(dto).(Validatable); ok {
 		if err := v.Validate(); err != nil {
 			return nil, err
@@ -86,6 +113,11 @@ func QueryDTO[T any](c Context) (*T, error) {
 	if err := c.Bind(dto); err != nil {
 		return nil, ErrBadRequest("invalid query parameters: " + err.Error())
 	}
+	if globalValidateFunc != nil {
+		if err := globalValidateFunc(dto); err != nil {
+			return nil, err
+		}
+	}
 	if v, ok := any(dto).(Validatable); ok {
 		if err := v.Validate(); err != nil {
 			return nil, err
@@ -117,6 +149,21 @@ func ParamInt(c Context, key string) (int, error) {
 		return 0, ErrBadRequest(fmt.Sprintf("path parameter '%s' is required", key))
 	}
 	n, err := strconv.Atoi(val)
+	if err != nil {
+		return 0, ErrBadRequest(fmt.Sprintf("path parameter '%s' must be an integer", key))
+	}
+	return n, nil
+}
+
+// ParamInt64 extracts a path parameter as int64.
+//
+//	id, err := core.ParamInt64(c, "id")
+func ParamInt64(c Context, key string) (int64, error) {
+	val := c.Param(key)
+	if val == "" {
+		return 0, ErrBadRequest(fmt.Sprintf("path parameter '%s' is required", key))
+	}
+	n, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
 		return 0, ErrBadRequest(fmt.Sprintf("path parameter '%s' must be an integer", key))
 	}

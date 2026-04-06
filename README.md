@@ -1,6 +1,8 @@
+<h1 align="center">NestGo</h1>
+
 <p align="center">
-  <h1 align="center">NestGo</h1>
-  <p align="center">A NestJS-inspired web framework for Go with adapter-based architecture.</p>
+  NestGo is a powerful and flexible web framework for Go (Golang) designed for building scalable and maintainable server-side applications. Inspired by <ahref="https://nestjs.com" title="Visit NestJS official website">NestJS</a>
+, NestGo stays true to Go’s philosophy of simplicity, performance, and explicitness while offering a modular architecture, dependency injection, and an adapter-based design. It is ideal for building REST APIs, microservices, and production-ready backend systems.
 </p>
 
 <p align="center">
@@ -23,9 +25,14 @@ NestGo brings the best ideas from [NestJS](https://nestjs.com) to Go: **Guards**
 - **Pipes** — transform/validate extracted values
 - **Exception filters** — custom error formatting per route or controller
 - **Type-safe extractors** — `@Body()`, `@Param()`, `@Query()` equivalents via generics
+- **int64 ID support** — `PInt64` extractor for database primary keys
+- **Request context extractor** — `RCtx()` passes `context.Context` to services for DB cancellation
+- **Pluggable validation** — `SetValidateFunc` bridges nestgo-validator (or any library) into Body/QueryDTO extraction
 - **API versioning** — URI, Header, or Media Type strategies
 - **SSE support** — channel-based Server-Sent Events
-- **Middleware ecosystem** — CORS, Helmet, Rate Limit, CSRF, Timeout, Recovery, Request ID, Compress
+- **Middleware ecosystem** — CORS, Helmet, Rate Limit, CSRF, Timeout, Recovery, Request ID, Compress, **Logger**
+- **Request logger** — built-in request logging with method, path, status, duration, IP
+- **Response status introspection** — `ResponseStatus()` on Context for logging and metrics
 - **Lifecycle hooks** — OnModuleInit / OnModuleDestroy + graceful shutdown
 - **Structured logger** — plug in zerolog, slog, zap, or any logger
 
@@ -85,7 +92,7 @@ func (c *UserController) Prefix() string { return "/users" }
 
 func (c *UserController) RegisterRoutes(r core.Router) {
     r.GET("/", core.Handle1(core.Q("search", ""), c.List))
-    r.GET("/:id", core.Handle1(core.PInt("id"), c.GetByID))
+    r.GET("/:id", core.Handle2(core.RCtx(), core.PInt64("id"), c.GetByID))
     r.POST("/", core.HandleC1(core.B[CreateUserDTO](), c.Create))
 }
 
@@ -93,7 +100,8 @@ func (c *UserController) List(search string) (any, error) {
     return []map[string]any{{"name": "John"}, {"name": "Jane"}}, nil
 }
 
-func (c *UserController) GetByID(id int) (any, error) {
+func (c *UserController) GetByID(ctx context.Context, id int64) (any, error) {
+    // ctx carries request cancellation — pass to DB, gRPC, HTTP calls
     return map[string]any{"id": id, "name": "John"}, nil
 }
 
@@ -111,6 +119,7 @@ func main() {
     app := di.NewApp(config, ginadapter.New,
         fx.Invoke(func(server core.Server) {
             server.Use(middleware.Recovery())
+            server.Use(middleware.Logger())
             server.Use(middleware.RequestID())
             server.Use(middleware.Helmet())
             server.Use(middleware.CORS())
@@ -218,11 +227,13 @@ NestGo's equivalent of NestJS decorators. Extract typed values from requests wit
 | `B[T]()` | `@Body()` | `*T` | Parse & validate body |
 | `P(key)` | `@Param('key')` | `string` | Path parameter |
 | `PInt(key)` | `@Param('key', ParseIntPipe)` | `int` | Path param as int |
+| `PInt64(key)` | `@Param('key', ParseIntPipe)` | `int64` | Path param as int64 (DB IDs) |
 | `Q(key, default...)` | `@Query('key')` | `string` | Query parameter |
 | `QInt(key, default...)` | `@Query('key', ParseIntPipe)` | `int` | Query param as int |
 | `QDto[T]()` | `@Query() dto` | `*T` | Query params into struct |
 | `H(key, required)` | `@Headers('key')` | `string` | Request header |
 | `Ctx()` | &mdash; | `Context` | Raw context |
+| `RCtx()` | &mdash; | `context.Context` | Request context for DB/gRPC calls |
 
 ### Handle Builders
 
@@ -236,6 +247,20 @@ r.POST("/:id", core.Handle2(core.PInt("id"), core.B[UpdateDTO](), ctrl.Update))
 // Need custom status code? Use HandleC variants (Context as first arg):
 r.POST("/", core.HandleC1(core.B[CreateDTO](), ctrl.Create))
 // ctrl.Create = func(c core.Context, dto *CreateDTO) error { return c.JSON(201, ...) }
+```
+
+### Request Context Extractor
+
+Pass `context.Context` directly to services — carries cancellation, timeouts, and tracing:
+
+```go
+// Handler receives context.Context + typed params — no manual extraction:
+func (ctrl *Ctrl) GetByID(ctx context.Context, id int64) (any, error) {
+    return ctrl.repo.FindByID(ctx, id)  // DB query respects request cancellation
+}
+
+// Register with RCtx() + PInt64():
+r.GET("/:id", core.Handle2(core.RCtx(), core.PInt64("id"), ctrl.GetByID))
 ```
 
 ## Guards
@@ -378,29 +403,77 @@ All middleware follows the same config pattern: defaults + optional customizatio
 | Middleware | Description |
 |-----------|-------------|
 | `Recovery()` | Panic recovery (register first) |
+| `Logger()` | Request logging — method, path, status, duration, IP |
 | `CORS()` | Cross-Origin Resource Sharing |
 | `Helmet()` | OWASP security headers |
 | `RateLimit()` | Per-key rate limiting (sharded, auto-cleanup) |
 | `RequestID()` | Unique request ID per request |
-| `Timeout()` | Request execution deadline |
+| `Timeout()` | Request timeout via `context.WithTimeout` — cancels DB/HTTP calls automatically |
 | `CSRF()` | Cross-Site Request Forgery protection |
 | `Compress()` / `GzipJSON()` | Gzip response compression |
 
 ```go
-// Defaults:
+// Recommended middleware stack:
 server.Use(middleware.Recovery())
+server.Use(middleware.Logger())
+server.Use(middleware.RequestID())
+server.Use(middleware.Helmet())
 server.Use(middleware.CORS())
 
-// Custom:
+// Custom rate limit:
 server.Use(middleware.RateLimit(middleware.RateLimitConfig{
     Max:    200,
     Window: 5 * time.Minute,
 }))
 
-// Per-route:
+// Per-route timeout:
 r.POST("/upload", handler, middleware.Timeout(middleware.TimeoutConfig{
     Timeout: 60 * time.Second,
 }))
+```
+
+### Request Logger
+
+Built-in request logging with response status, duration, and client IP:
+
+```go
+// Default: logs via core.Log()
+server.Use(middleware.Logger())
+
+// Skip health checks:
+server.Use(middleware.Logger(middleware.LoggerConfig{
+    SkipFunc: func(c core.Context) bool {
+        return c.Path() == "/health"
+    },
+}))
+
+// Custom output (e.g. structured JSON logger):
+server.Use(middleware.Logger(middleware.LoggerConfig{
+    LogFunc: func(c core.Context, status int, d time.Duration, err error) {
+        slog.Info("request",
+            "method", c.Method(),
+            "path", c.FullURL(),
+            "status", status,
+            "ms", d.Milliseconds(),
+        )
+    },
+}))
+```
+
+### Response Status Introspection
+
+Read the HTTP response status code after handler execution — useful in interceptors and logging:
+
+```go
+timing := core.InterceptorFunc(func(c core.Context, next core.HandlerFunc) error {
+    start := time.Now()
+    err := next(c)
+    core.Log().Info("request",
+        core.F("status", c.ResponseStatus()),
+        core.F("duration", time.Since(start)),
+    )
+    return err
+})
 ```
 
 ## Lifecycle Hooks
@@ -444,6 +517,34 @@ core.Log().Info("started", core.F("addr", ":3000"))
 // Plug in your own (zerolog, slog, zap):
 core.SetLogger(myZerologAdapter)
 ```
+
+## Pluggable Validation
+
+Bridge `nestgo-validator` (or any validation library) so `Body[T]()` and `QueryDTO[T]()` validate automatically — no need to implement `Validatable` on every DTO:
+
+```go
+import "github.com/ashrafAli23/nestgo-validator"
+
+func main() {
+    // One line — all DTOs with `validate` tags are auto-validated on extraction:
+    core.SetValidateFunc(validator.Validate)
+
+    // ...
+}
+```
+
+```go
+type CreateUserDTO struct {
+    Name  string `json:"name"  validate:"required,min=3,max=50"`
+    Email string `json:"email" validate:"required,email"`
+}
+
+// No Validate() method needed — struct tags are checked automatically.
+// You can STILL add Validate() for custom business logic on top.
+r.POST("/users", core.Handle1(core.B[CreateUserDTO](), ctrl.Create))
+```
+
+Validation order: struct tags (via `SetValidateFunc`) run first, then `Validatable.Validate()` for custom logic.
 
 ## Error Handling
 

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"io"
 	"mime/multipart"
 )
@@ -75,8 +76,18 @@ type Context interface {
 	// SendStream sends a streaming response.
 	SendStream(stream io.Reader) error
 
+	// SendFile sends a file to the client.
+	SendFile(filePath string) error
+
+	// Download prompts the client to download the file.
+	Download(filePath string, filename string) error
+
 	// NoContent sends a response with no body and the given status code.
 	NoContent(status int) error
+
+	// ResponseStatus returns the HTTP response status code that has been set.
+	// Returns 0 if no response has been written yet.
+	ResponseStatus() int
 
 	// SetHeader sets a response header.
 	SetHeader(key, value string)
@@ -132,4 +143,14 @@ type Context interface {
 	// Use this ONLY when you absolutely need framework-specific features.
 	// This breaks the abstraction — use sparingly.
 	Underlying() interface{}
+
+	// ─── Native Standard Context ────────────────────────────────────────────
+
+	// RequestCtx returns the standard library context.Context.
+	// This is useful for passing to database queries, gRPC clients, etc.
+	RequestCtx() context.Context
+
+	// SetRequestCtx sets the standard library context.Context.
+	// This is useful for middleware that needs to inject values (like tracing).
+	SetRequestCtx(ctx context.Context)
 }

@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"sync"
+	"context"
 	"time"
 
 	core "github.com/ashrafAli23/nestgo/core"
@@ -81,40 +81,27 @@ func Timeout(config ...TimeoutConfig) core.MiddlewareFunc {
 				return next(c)
 			}
 
-			// Clone the context so the goroutine doesn't race with the
-			// timeout path writing on the original response.
-			cloned := c.Clone()
+			// Set a deadline on the request context. All downstream I/O
+			// (DB queries, HTTP clients, gRPC calls) that respect
+			// context.Context will cancel automatically when the
+			// deadline fires — no goroutine or Clone needed.
+			ctx, cancel := context.WithTimeout(c.RequestCtx(), cfg.Timeout)
+			defer cancel()
+			c.SetRequestCtx(ctx)
 
-			// finished guards against double-write: only the first path
-			// (handler completion OR timeout) gets to touch the original context.
-			var finished sync.Once
-			done := make(chan error, 1)
+			err := next(c)
 
-			go func() {
-				err := next(cloned)
-				done <- err
-			}()
-
-			timer := time.NewTimer(cfg.Timeout)
-			defer timer.Stop()
-
-			select {
-			case err := <-done:
-				// Handler finished in time — no data race because the
-				// goroutine wrote to cloned, not c.
-				return err
-			case <-timer.C:
-				// Timeout fired. Drain the goroutine in background so it
-				// doesn't leak.
-				go func() {
-					<-done // wait for handler goroutine to finish
-				}()
-				var retErr error
-				finished.Do(func() {
-					retErr = timeoutErr
-				})
-				return retErr
+			// If the handler returned an error and the deadline was
+			// exceeded, replace the error with a clean timeout response.
+			if err != nil && ctx.Err() == context.DeadlineExceeded {
+				return timeoutErr
 			}
+			// If the handler succeeded but the deadline fired during
+			// response writing, still report the timeout.
+			if err == nil && ctx.Err() == context.DeadlineExceeded {
+				return timeoutErr
+			}
+			return err
 		}
 	}
 }

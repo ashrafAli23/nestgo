@@ -1,5 +1,7 @@
 package core
 
+import "context"
+
 // ─── Handler Builder ────────────────────────────────────────────────────────
 //
 // This gives you NestJS-style parameter injection. Instead of writing:
@@ -71,6 +73,18 @@ func PInt(key string) Extractor[int] {
 	}
 }
 
+// PInt64 extracts a path parameter as int64.
+// Use when your IDs are int64 (e.g. database primary keys).
+//
+//	r.GET("/:id", core.Handle1(core.PInt64("id"), ctrl.GetByID))
+func PInt64(key string) Extractor[int64] {
+	return Extractor[int64]{
+		Extract: func(c Context) (int64, error) {
+			return ParamInt64(c, key)
+		},
+	}
+}
+
 // Q extracts a single query parameter as string with optional default.
 // Equivalent to NestJS's @Query('key')
 func Q(key string, defaultValue ...string) Extractor[string] {
@@ -117,6 +131,22 @@ func Ctx() Extractor[Context] {
 	return Extractor[Context]{
 		Extract: func(c Context) (Context, error) {
 			return c, nil
+		},
+	}
+}
+
+// RCtx extracts the standard library context.Context from the request.
+// Useful for passing to database queries, gRPC clients, HTTP calls, etc.
+//
+//	r.GET("/:id", core.Handle2(core.RCtx(), core.PInt64("id"), ctrl.GetByID))
+//
+// Where ctrl.GetByID is:
+//
+//	func (ctrl *Ctrl) GetByID(ctx context.Context, id int64) (any, error)
+func RCtx() Extractor[context.Context] {
+	return Extractor[context.Context]{
+		Extract: func(c Context) (context.Context, error) {
+			return c.RequestCtx(), nil
 		},
 	}
 }

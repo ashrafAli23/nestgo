@@ -1,6 +1,6 @@
 module github.com/ashrafAli23/nestgo
 
-go 1.23.0
+go 1.25.0
 
 require go.uber.org/fx v1.24.0
 

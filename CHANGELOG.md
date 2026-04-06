@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-06
+
+### Added
+
+#### Core (`core/`)
+- `ResponseStatus() int` on `Context` interface — read the HTTP response status code after handler execution, enabling logging middleware and metrics interceptors to observe response outcomes
+- `ParamInt64(c, key)` — extract path parameters as `int64` for database primary keys
+- `PInt64(key)` extractor — use with Handle functions: `core.Handle1(core.PInt64("id"), ctrl.GetByID)`
+- `RCtx()` extractor — extract `context.Context` from request for passing to DB queries, gRPC clients, and HTTP calls with automatic cancellation propagation
+- `SetValidateFunc(fn)` — register a global validation function that `Body[T]()` and `QueryDTO[T]()` call automatically after binding, bridging `nestgo-validator` or any validation library without implementing `Validatable` on every DTO
+
+#### Middleware (`middleware/`)
+- `Logger()` — request logging middleware with method, path, status code, duration, and client IP. Supports `SkipFunc` for excluding routes (e.g. health checks) and `LogFunc` for custom structured output (slog, zap, zerolog)
+
+### Changed
+
+#### Middleware (`middleware/`)
+- **Breaking fix:** `Timeout()` middleware rewritten to use `context.WithTimeout` instead of goroutine + `Clone()`. The previous implementation ran the handler on a cloned context whose response methods were no-ops (Fiber adapter), silently discarding responses. The new implementation sets a deadline on the request context — all downstream I/O (database queries, HTTP clients, gRPC calls) cancel automatically when the deadline fires. No goroutine races, no clone issues, works identically on both Gin and Fiber adapters.
+
+### Fixed
+- Timeout middleware no longer silently drops handler responses on the Fiber adapter
+
+---
+
 ## [0.1.0] - 2026-04-05
 
 ### Added
