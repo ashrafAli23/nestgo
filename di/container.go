@@ -143,8 +143,13 @@ func NewApp(config *core.Config, provider ServerProvider, opts ...fx.Option) *fx
 			}
 			return router
 		}),
-		CoreModule,
 	}
 
-	return fx.New(append(baseOpts, opts...)...)
+	// User options (including middleware setup) must come before CoreModule
+	// so that middleware is registered before RegisterControllers adds routes.
+	// Fiber executes handlers in registration order, so middleware registered
+	// after routes won't wrap those route handlers.
+	allOpts := append(baseOpts, opts...)
+	allOpts = append(allOpts, CoreModule)
+	return fx.New(allOpts...)
 }
