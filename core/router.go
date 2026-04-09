@@ -9,6 +9,8 @@ type Router interface {
 	PATCH(path string, handler HandlerFunc, middleware ...MiddlewareFunc)
 	OPTIONS(path string, handler HandlerFunc, middleware ...MiddlewareFunc)
 	HEAD(path string, handler HandlerFunc, middleware ...MiddlewareFunc)
+	// ANY registers a handler for all HTTP methods on the given path.
+	ANY(path string, handler HandlerFunc, middleware ...MiddlewareFunc)
 	Group(prefix string, middleware ...MiddlewareFunc) Router
 	Use(middleware ...MiddlewareFunc)
 	Static(path string, root string, middleware ...MiddlewareFunc)

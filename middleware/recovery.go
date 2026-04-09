@@ -30,7 +30,10 @@ func DefaultRecoveryConfig() RecoveryConfig {
 		StackSize:        8192,
 		EnableStackTrace: false,
 		LogFunc: func(c core.Context, err interface{}, stack string) {
-			fmt.Printf("[NestGo] PANIC RECOVERED: %v\n%s\n", err, stack)
+			core.Log().Error("panic recovered",
+				core.F("error", fmt.Sprintf("%v", err)),
+				core.F("stack", stack),
+			)
 		},
 	}
 }
@@ -53,7 +56,10 @@ func Recovery(config ...RecoveryConfig) core.MiddlewareFunc {
 	}
 	if cfg.LogFunc == nil {
 		cfg.LogFunc = func(c core.Context, err interface{}, stack string) {
-			fmt.Printf("[NestGo] PANIC RECOVERED: %v\n%s\n", err, stack)
+			core.Log().Error("panic recovered",
+				core.F("error", fmt.Sprintf("%v", err)),
+				core.F("stack", stack),
+			)
 		}
 	}
 

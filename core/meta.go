@@ -10,7 +10,7 @@ package core
 //
 // In the guard:
 //
-//	roles, _ := c.Get("roles")
+//	roles := c.Get("roles")
 func WithMeta(key string, value interface{}) MiddlewareFunc {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c Context) error {

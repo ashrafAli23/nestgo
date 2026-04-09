@@ -3,6 +3,9 @@ package di
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	core "github.com/ashrafAli23/nestgo/core"
@@ -51,29 +54,53 @@ func RegisterControllers(router core.Router, config *core.Config, reg Controller
 
 		ctrl.RegisterRoutes(r)
 	}
-	fmt.Printf("[NestGo] Registered %d controller(s)\n", len(reg.Controllers))
+	core.Log().Info("controllers registered", core.F("count", len(reg.Controllers)))
 }
 
 // ─── Server Lifecycle ───────────────────────────────────────────────────────
 
 // StartServer hooks the server into fx lifecycle (start on OnStart, stop on OnStop).
-func StartServer(lc fx.Lifecycle, server core.Server, config *core.Config) {
+// It also listens for OS signals (SIGINT, SIGTERM) so that graceful shutdown
+// runs automatically when the process is killed (e.g. Kubernetes SIGTERM).
+func StartServer(lc fx.Lifecycle, server core.Server, config *core.Config, shutdowner fx.Shutdowner) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
+			// Start the HTTP(S) server in the background.
 			go func() {
-				if err := server.Start(config.Addr); err != nil {
-					fmt.Printf("[NestGo] Server error: %v\n", err)
+				var err error
+				if config.TLSCertFile != "" && config.TLSKeyFile != "" {
+					err = server.StartTLS(config.Addr, config.TLSCertFile, config.TLSKeyFile)
+				} else {
+					err = server.Start(config.Addr)
+				}
+				if err != nil {
+					core.Log().Error("server error", core.F("error", err))
 				}
 			}()
+
+			// Listen for OS termination signals and trigger fx shutdown
+			// so that OnStop hooks (including OnShutdown) run cleanly.
+			go func() {
+				sigCh := make(chan os.Signal, 1)
+				signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+				sig := <-sigCh
+				core.Log().Info("received signal, shutting down", core.F("signal", sig.String()))
+				_ = shutdowner.Shutdown()
+			}()
+
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			shutdownCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			timeout := config.ShutdownTimeout
+			if timeout <= 0 {
+				timeout = 10 * time.Second
+			}
+			shutdownCtx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 			// Run user shutdown hooks before stopping the server
 			for _, hook := range config.OnShutdown {
 				if err := hook(shutdownCtx); err != nil {
-					fmt.Printf("[NestGo] OnShutdown hook error: %v\n", err)
+					core.Log().Error("OnShutdown hook error", core.F("error", err))
 				}
 			}
 			return server.Shutdown(shutdownCtx)
@@ -96,6 +123,7 @@ func ConfigModule(config *core.Config) fx.Option {
 // CoreModule bundles controller registration + server lifecycle.
 // Every app should include this.
 var CoreModule = fx.Module("nestgo",
+	fx.Invoke(RegisterHealthEndpoints),
 	fx.Invoke(RegisterControllers),
 	fx.Invoke(StartServer),
 	fx.Invoke(RegisterLifecycleHooks),
@@ -132,9 +160,18 @@ func NewApp(config *core.Config, provider ServerProvider, opts ...fx.Option) *fx
 			if cfg.GlobalPrefix != "" {
 				router = server.Group(cfg.GlobalPrefix)
 			}
-			// Apply global guards, interceptors, and filters
+			// Apply global middleware first (outermost)
+			if len(cfg.GlobalMiddlewares) > 0 {
+				router.Use(cfg.GlobalMiddlewares...)
+			}
+			// Register global ValidateFunc if set via config
+			if cfg.ValidateFunc != nil {
+				core.SetValidateFunc(cfg.ValidateFunc)
+			}
+			// Apply global guards, pipes, interceptors, and filters
 			globalMws := core.ApplyRouteOptions(core.RouteOptions{
 				Guards:       cfg.GlobalGuards,
+				Pipes:        cfg.GlobalPipes,
 				Interceptors: cfg.GlobalInterceptors,
 				Filters:      cfg.GlobalFilters,
 			})

@@ -13,6 +13,7 @@ type CORSConfig struct {
 	AllowOrigins     []string
 	AllowMethods     []string
 	AllowHeaders     []string
+	ExposeHeaders    []string // headers the browser is allowed to read (e.g. X-Total-Count)
 	AllowCredentials bool
 	MaxAge           int // seconds
 }
@@ -38,6 +39,7 @@ func CORS(config ...CORSConfig) core.MiddlewareFunc {
 	// Pre-compute all header strings at init time — zero allocations per request.
 	methods := strings.Join(cfg.AllowMethods, ", ")
 	headers := strings.Join(cfg.AllowHeaders, ", ")
+	expose := strings.Join(cfg.ExposeHeaders, ", ")
 	maxAge := strconv.Itoa(cfg.MaxAge)
 
 	// Build origin lookup map for O(1) checks instead of O(n) slice iteration.
@@ -67,6 +69,9 @@ func CORS(config ...CORSConfig) core.MiddlewareFunc {
 
 			c.SetHeader("Access-Control-Allow-Methods", methods)
 			c.SetHeader("Access-Control-Allow-Headers", headers)
+			if expose != "" {
+				c.SetHeader("Access-Control-Expose-Headers", expose)
+			}
 
 			if cfg.AllowCredentials {
 				c.SetHeader("Access-Control-Allow-Credentials", "true")
