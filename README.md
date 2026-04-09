@@ -23,19 +23,27 @@ NestGo brings the best ideas from [NestJS](https://nestjs.com) to Go: **Guards**
 - **Dependency injection** — uber/fx powered, module-based
 - **Guards** — auth/RBAC checks before handlers run
 - **Interceptors** — before/after logic (logging, caching, timing)
-- **Pipes** — transform/validate extracted values
+- **Pipes** — transform/validate extracted values; `GlobalPipes` + `ValidateFunc` for app-wide validation
 - **Exception filters** — custom error formatting per route or controller
+- **Structured errors** — `FieldError`, `NewValidationError`, RFC 7807 `ProblemDetailErrorHandler`
 - **Type-safe extractors** — `@Body()`, `@Param()`, `@Query()` equivalents via generics
 - **int64 ID support** — `PInt64` extractor for database primary keys
 - **Request context extractor** — `RCtx()` passes `context.Context` to services for DB cancellation
-- **Pluggable validation** — `SetValidateFunc` bridges nestgo-validator (or any library) into Body/QueryDTO extraction
+- **Pluggable validation** — `ValidateFunc` config field (or `SetValidateFunc`) bridges nestgo-validator into Body/QueryDTO
 - **API versioning** — URI, Header, or Media Type strategies
 - **SSE support** — channel-based Server-Sent Events
-- **Middleware ecosystem** — CORS, Helmet, Rate Limit, CSRF, Timeout, Recovery, Request ID, Compress, **Logger**
-- **Request logger** — built-in request logging with method, path, status, duration, IP
+- **Middleware ecosystem** — CORS (ExposeHeaders), Helmet, Rate Limit, CSRF, Timeout, Recovery, Request ID, Compress, Logger, Tracing, ETag, Idempotency, BodyLimit, Upload
+- **Distributed tracing** — W3C `traceparent` propagation, trace_id/span_id in context and response headers
+- **ETag support** — SHA-256 response hashing + `If-None-Match` → 304 Not Modified
+- **Idempotency** — replay-safe mutations with pluggable store (in-memory or Redis)
+- **TLS/HTTPS** — `Config.TLSCertFile`/`TLSKeyFile` auto-activates `StartTLS`
+- **Health & readiness** — `Config.HealthCheck` + `ReadinessCheck` auto-registers K8s probes
+- **Graceful shutdown** — SIGINT/SIGTERM triggers `OnShutdown` hooks + request draining
+- **Response body access** — `ResponseBody()` on Context for interceptors and audit logging
+- **ANY route** — register a handler for all HTTP methods
 - **Response status introspection** — `ResponseStatus()` on Context for logging and metrics
 - **Lifecycle hooks** — OnModuleInit / OnModuleDestroy + graceful shutdown
-- **Structured logger** — plug in zerolog, slog, zap, or any logger
+- **Structured logger** — plug in zerolog, slog, zap, or any logger; used throughout framework internals
 
 ## Install
 
@@ -404,14 +412,19 @@ All middleware follows the same config pattern: defaults + optional customizatio
 | Middleware | Description |
 |-----------|-------------|
 | `Recovery()` | Panic recovery (register first) |
-| `Logger()` | Request logging — method, path, status, duration, IP |
-| `CORS()` | Cross-Origin Resource Sharing |
+| `Logger()` | Request logging — method, path, status, duration, IP. Auto-includes `request_id` and `trace_id` |
+| `CORS()` | Cross-Origin Resource Sharing. Supports `ExposeHeaders` for pagination/tracing headers |
 | `Helmet()` | OWASP security headers |
 | `RateLimit()` | Per-key rate limiting (sharded, auto-cleanup) |
 | `RequestID()` | Unique request ID per request |
+| `Tracing()` | W3C `traceparent` propagation — generates/extracts `trace_id` and `span_id` |
 | `Timeout()` | Request timeout via `context.WithTimeout` — cancels DB/HTTP calls automatically |
 | `CSRF()` | Cross-Site Request Forgery protection |
 | `Compress()` / `GzipJSON()` | Gzip response compression |
+| `ETag()` | SHA-256 ETag generation + `If-None-Match` → 304 Not Modified |
+| `Idempotency()` | Cache responses by `Idempotency-Key` — safe retries for payment APIs. Pluggable store |
+| `BodyLimit()` | Per-route request body size limit (overrides global `Config.BodyLimit`) |
+| `Upload()` | File upload validation: size, MIME type (content-sniffed), extension |
 
 ```go
 // Recommended middleware stack:

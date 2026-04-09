@@ -2,7 +2,6 @@ package di
 
 import (
 	"context"
-	"fmt"
 
 	core "github.com/ashrafAli23/nestgo/core"
 	"go.uber.org/fx"
@@ -39,22 +38,23 @@ func RegisterLifecycleHooks(lc fx.Lifecycle, reg LifecycleRegistration) {
 		OnStart: func(ctx context.Context) error {
 			for _, h := range reg.InitHooks {
 				if err := h.OnModuleInit(ctx); err != nil {
-					return fmt.Errorf("[NestGo] OnModuleInit failed: %w", err)
+					core.Log().Error("OnModuleInit failed", core.F("error", err))
+					return err
 				}
 			}
 			if len(reg.InitHooks) > 0 {
-				fmt.Printf("[NestGo] %d OnModuleInit hook(s) executed\n", len(reg.InitHooks))
+				core.Log().Info("lifecycle hooks executed", core.F("OnModuleInit", len(reg.InitHooks)))
 			}
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
 			for _, h := range reg.DestroyHooks {
 				if err := h.OnModuleDestroy(ctx); err != nil {
-					fmt.Printf("[NestGo] OnModuleDestroy error: %v\n", err)
+					core.Log().Error("OnModuleDestroy error", core.F("error", err))
 				}
 			}
 			if len(reg.DestroyHooks) > 0 {
-				fmt.Printf("[NestGo] %d OnModuleDestroy hook(s) executed\n", len(reg.DestroyHooks))
+				core.Log().Info("lifecycle hooks executed", core.F("OnModuleDestroy", len(reg.DestroyHooks)))
 			}
 			return nil
 		},

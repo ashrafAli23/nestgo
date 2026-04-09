@@ -25,13 +25,11 @@ func ExampleGuardFunc() {
 // Guards run in order — first failure stops the chain.
 func ExampleUseGuards() {
 	authGuard := core.GuardFunc(func(c core.Context) (bool, error) {
-		_, ok := c.Get("user")
-		return ok, nil
+		return c.Get("user") != nil, nil
 	})
 
 	adminGuard := core.GuardFunc(func(c core.Context) (bool, error) {
-		role, _ := c.Get("role")
-		return role == "admin", nil
+		return c.Get("role") == "admin", nil
 	})
 
 	// Apply at different levels:
@@ -144,8 +142,8 @@ func ExampleApplyRouteOptions() {
 // WithMeta attaches metadata to routes for guards/interceptors to read.
 func ExampleWithMeta() {
 	roleGuard := core.GuardFunc(func(c core.Context) (bool, error) {
-		roles, ok := c.Get("roles")
-		if !ok {
+		roles := c.Get("roles")
+		if roles == nil {
 			return false, nil
 		}
 		_ = roles // check if user's role is in the allowed list

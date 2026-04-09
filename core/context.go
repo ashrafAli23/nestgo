@@ -89,6 +89,11 @@ type Context interface {
 	// Returns 0 if no response has been written yet.
 	ResponseStatus() int
 
+	// ResponseBody returns a copy of the response body that has been written.
+	// Useful in interceptors to inspect/log the response after the handler runs.
+	// Returns nil if no body has been written yet.
+	ResponseBody() []byte
+
 	// SetHeader sets a response header.
 	SetHeader(key, value string)
 
@@ -115,7 +120,8 @@ type Context interface {
 	Set(key string, value interface{})
 
 	// Get retrieves a value from the request context.
-	Get(key string) (interface{}, bool)
+	// Returns nil if the key does not exist.
+	Get(key string) interface{}
 
 	// ─── Flow Control ───────────────────────────────────────────────
 

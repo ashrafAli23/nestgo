@@ -87,14 +87,14 @@ func Compress(config ...CompressConfig) core.MiddlewareFunc {
 //	    return middleware.GzipJSON(c, 200, data)
 //	}
 func GzipJSON(c core.Context, status int, data interface{}) error {
-	levelRaw, hasCompress := c.Get("__compress_level")
-	if !hasCompress {
+	levelRaw := c.Get("__compress_level")
+	if levelRaw == nil {
 		return c.JSON(status, data)
 	}
 
 	level := levelRaw.(int)
 	minLength := 1024
-	if minRaw, ok := c.Get("__compress_min"); ok {
+	if minRaw := c.Get("__compress_min"); minRaw != nil {
 		minLength = minRaw.(int)
 	}
 

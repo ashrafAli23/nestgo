@@ -73,6 +73,13 @@ func Logger(config ...LoggerConfig) core.MiddlewareFunc {
 					core.F("duration", duration.String()),
 					core.F("ip", c.ClientIP()),
 				}
+				// Auto-include correlation IDs when present
+				if rid, _ := c.Get("request_id").(string); rid != "" {
+					fields = append(fields, core.F("request_id", rid))
+				}
+				if tid, _ := c.Get("trace_id").(string); tid != "" {
+					fields = append(fields, core.F("trace_id", tid))
+				}
 				if err != nil {
 					fields = append(fields, core.F("error", err.Error()))
 					core.Log().Error("request", fields...)
