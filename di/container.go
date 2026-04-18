@@ -83,6 +83,7 @@ func StartServer(lc fx.Lifecycle, server core.Server, config *core.Config, shutd
 			go func() {
 				sigCh := make(chan os.Signal, 1)
 				signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+				defer signal.Stop(sigCh)
 				sig := <-sigCh
 				core.Log().Info("received signal, shutting down", core.F("signal", sig.String()))
 				_ = shutdowner.Shutdown()

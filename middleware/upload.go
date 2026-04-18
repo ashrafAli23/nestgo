@@ -110,8 +110,11 @@ func Upload(config ...UploadConfig) core.MiddlewareFunc {
 				}
 				// Read first 512 bytes for MIME detection
 				buf := make([]byte, 512)
-				n, _ := f.Read(buf)
+				n, readErr := f.Read(buf)
 				f.Close()
+				if readErr != nil && readErr != io.EOF {
+					return core.ErrInternalServer("failed to read uploaded file for MIME detection")
+				}
 				mimeType = http.DetectContentType(buf[:n])
 				if _, ok := mimeMap[mimeType]; !ok {
 					return core.ErrBadRequest("file type not allowed: " + mimeType)
